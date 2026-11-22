@@ -10,14 +10,33 @@ if (!KEY) {
 }
 
 http.createServer((req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept");
+
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
   const target = new URL("https://api-v3.mbta.com" + req.url);
   const upstream = https.request(target, { method: req.method }, (up) => {
     res.writeHead(up.statusCode, {
-      "Content-Type": "application/vnd.api+json",
+      "Content-Type": up.headers["content-type"] || "application/vnd.api+json",
       "Cache-Control": "max-age=15",
     });
     up.pipe(res);
   });
+
+  upstream.on("error", (err) => {
+    console.error("upstream error:", err.message);
+    if (!res.headersSent) {
+      res.writeHead(502, { "Content-Type": "text/plain" });
+    }
+    res.end("upstream error");
+  });
+
   upstream.setHeader("X-API-Key", KEY);
   upstream.setHeader("Accept", "application/vnd.api+json");
   upstream.end();
